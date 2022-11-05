@@ -1,0 +1,170 @@
+---
+title: "Untitled"
+author: "Kriti Saxena"
+date: '2022-10-01'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries}
+library(forecast)
+library(tidyverse)
+library(lubridate)
+library(plyr)
+library(scales)
+library(dplyr)
+library(here)
+```
+# Clean and explore the data 
+
+```{r}
+library(here)
+```
+
+# change date to date format 
+```{r pressure, echo=FALSE}
+sales <- sales %>%
+  mutate(Date = dmy(Date),
+         Store = as.factor(Store))
+```
+
+```{r}
+head(sales)
+sales %>% summary()
+str(sales)
+head(sales)
+dim(sales)
+length(table(sales$Store))
+colSums(is.na(sales))
+all(duplicated(sales))
+```
+
+```{r}
+sales %>%
+  distinct(Store, Weekly_Sales) %>%
+  group_by(Store) %>%
+  summarize(mean_weekly_sales = mean(Weekly_Sales))
+```
+store 20 
+
+```{r}
+mean_sales <- aggregate(Weekly_Sales ~ Store, data = sales, mean)
+mean_sales %>% 
+  slice_max(order_by = Weekly_Sales, n=1)
+```
+Since store 20 has had most number of sales, we will predict if it will continue to keep up with the sales in upcoming year
+
+```{r}
+sales_1 <- sales %>% 
+  filter(Store == 20)
+```
+
+```{r}
+sales_1 %>%
+  ggplot(aes(x=Date, y = Weekly_Sales)) + geom_line()
+```
+Since the graph is very cluttered, we will look at smaller time frames 
+
+```{r}
+sales_1 %>%
+  filter(Date <= '2011-02-05') %>%
+  ggplot(aes(x=Date, y = Weekly_Sales)) + geom_line()
+```
+```{r}
+sales_1 %>%
+  filter(Date > '2011-02-05' & Date < '2012-02-10') %>%
+  ggplot(aes(x=Date, y = Weekly_Sales)) + geom_line()
+```
+```{r}
+sales_1 %>%
+  filter(Date > '2012-02-10' & Date < '2012-10-26') %>%
+  ggplot(aes(x=Date, y = Weekly_Sales)) + geom_line()
+```
+
+After looking at the data in shorter time period, a similar period can be noticed every year. 
+- The sales tends to increase in the month of December and between the months of April and May. 
+
+```{r}
+conv_month <- sales_1 %>%
+  mutate(monthly = floor_date(Date,"month"))
+```
+
+```{r}
+sum_monthly_sales <- aggregate(Weekly_Sales ~ monthly, data = conv_month, sum)
+class(sum_monthly_sales)
+```
+
+```{r}
+sum_monthly_sales<- sum_monthly_sales %>%
+  mutate(sales = Weekly_Sales/1000000)
+```
+
+```{r}
+sum_monthly_sales %>%
+  ggplot(aes(x=monthly, y = sales)) + geom_line()
+```
+```{r}
+# sales for months of 2010
+sum_monthly_sales %>%
+  filter(monthly < "2011-01-01") %>%
+  ggplot(aes(x=monthly, y=sales)) + geom_line() 
+```
+```{r}
+# sales for months of 2011
+sum_monthly_sales %>%
+  filter(monthly < "2012-01-01" & monthly > '2011-01-01') %>%
+  ggplot(aes(x=monthly, y=sales)) + geom_line()
+```
+
+```{r}
+# sales for month of 2012
+sum_monthly_sales %>%
+  filter(monthly > '2012-01-01') %>%
+  ggplot(aes(x=monthly, y=sales)) + geom_line()
+```
+```{r}
+sum_monthly_sales <- sum_monthly_sales %>%
+  add_row(monthly = ymd(20100101), sales = 5.45) %>%
+  arrange(monthly)
+```
+
+```{r}
+sum_monthly_sales <- sum_monthly_sales %>%
+  mutate(month = month(monthly))
+```
+
+```{r}
+sum_monthly_sales$sales <- ts(sum_monthly_sales$sales)
+sum_monthly_sales$month <- as.factor(sum_monthly_sales$month)
+str(sum_monthly_sales)
+```
+
+```{r}
+Model <- lm(sales ~ month, data = sum_monthly_sales)
+summary(Model)
+```
+
+```{r}
+ts_data <- ts(sum_monthly_sales$sales, frequency = 12)
+data <- decompose(ts_data, "multiplicative")
+plot(data)
+```
+
+```{r}
+for_sarima <- ts(sum_monthly_sales$sales, start = 2010, frequency = 12)
+
+# SARIMA
+model <- auto.arima(for_sarima, D = 1)
+summary(model)
+```
+
+```{r}
+sales_p <- forecast(model, h = 14)
+plot(sales_p)
+p <- data.frame(summary(sales_p)$mean)
+p
+```
+
