@@ -3,6 +3,7 @@
 The project aims at exploring the walmart sales data and identify trends. Then, develop a SARIMA model to predict future sales. The dataset was extracted from Kaggle and then cleaned before modeling.
 
 # importing relevent libraries 
+```
 library(forecast)
 library(tidyverse)
 library(lubridate)
@@ -10,7 +11,7 @@ library(plyr)
 library(scales)
 library(dplyr)
 library(here)
-
+```
 
 
 # change date to date format 
